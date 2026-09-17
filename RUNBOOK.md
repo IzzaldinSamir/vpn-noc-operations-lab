@@ -79,7 +79,7 @@ docker compose restart site-a vpn-exporter blackbox-exporter
 ```bash
 docker compose exec -T site-a wg show
 docker compose exec -T site-b wg show
-docker compose exec -T site-a ping -c 3 172.30.0.3
+docker compose exec -T site-a ping -c 3 site-b
 docker compose exec -T site-a tcpdump -ni eth0 udp port 51820 -c 10
 ```
 

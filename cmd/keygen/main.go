@@ -78,10 +78,10 @@ func run(outDir string, force bool) error {
 
 	aPath := filepath.Join(outDir, "site-a", "wg0.conf")
 	bPath := filepath.Join(outDir, "site-b", "wg0.conf")
-	if err := writeConfig(aPath, config("10.77.0.1", siteA.private, siteB.public, "172.30.0.3", "10.77.0.2"), force); err != nil {
+	if err := writeConfig(aPath, config("10.77.0.1", siteA.private, siteB.public, "site-b", "10.77.0.2"), force); err != nil {
 		return err
 	}
-	if err := writeConfig(bPath, config("10.77.0.2", siteB.private, siteA.public, "172.30.0.2", "10.77.0.1"), force); err != nil {
+	if err := writeConfig(bPath, config("10.77.0.2", siteB.private, siteA.public, "site-a", "10.77.0.1"), force); err != nil {
 		return err
 	}
 
