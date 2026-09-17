@@ -157,8 +157,6 @@ The validation pipeline checks:
 
 This is an isolated local training environment, not a production VPN appliance. Host ports bind to `127.0.0.1`; private keys are generated locally and ignored by Git; monitoring containers use read-only filesystems where practical. The two VPN peers require `NET_ADMIN` to create interfaces and inject controlled faults. Do not reuse generated keys, default credentials, routing assumptions, or anonymous Grafana access outside the lab.
 
-## Resume-ready summary
+## License
 
-> Built a reproducible WireGuard VPN operations lab with Prometheus, Blackbox Exporter, Grafana, Alertmanager, a custom Go metrics exporter, synthetic ICMP/TCP/HTTP/DNS checks, nine alert rules, controlled failure drills, CI validation, and an L1/L2 incident runbook.
-
-Built by [Izzaldin Samir](https://github.com/IzzaldinSamir).
+Licensed under the [MIT License](LICENSE).
