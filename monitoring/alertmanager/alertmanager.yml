@@ -1,0 +1,23 @@
+global:
+  resolve_timeout: 2m
+
+route:
+  receiver: local-incident-log
+  group_by:
+    - alertname
+    - component
+    - severity
+  group_wait: 5s
+  group_interval: 1m
+  repeat_interval: 15m
+  routes:
+    - matchers:
+        - severity="critical"
+      receiver: local-incident-log
+      repeat_interval: 5m
+
+receivers:
+  - name: local-incident-log
+    webhook_configs:
+      - url: http://incident-webhook:8081/alerts
+        send_resolved: true

@@ -1,0 +1,112 @@
+groups:
+  - name: vpn-tunnel
+    rules:
+      - alert: VPNExporterUnavailable
+        expr: up{job="vpn-exporter"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          owner: noc
+          component: monitoring
+        annotations:
+          summary: WireGuard metrics exporter is unavailable
+          description: Prometheus cannot scrape the exporter in the site-a network namespace.
+          runbook_url: https://github.com/IzzaldinSamir/vpn-noc-operations-lab/blob/main/RUNBOOK.md#vpnexporterunavailable
+
+      - alert: VPNTunnelInterfaceDown
+        expr: vpn_tunnel_up{interface="wg0"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          owner: noc
+          component: wireguard
+        annotations:
+          summary: WireGuard interface wg0 is down
+          description: The exporter cannot find the expected WireGuard tunnel interface.
+          runbook_url: https://github.com/IzzaldinSamir/vpn-noc-operations-lab/blob/main/RUNBOOK.md#vpntunnelinterfacedown
+
+      - alert: VPNHandshakeMissing
+        expr: vpn_peer_configured == 1 and vpn_peer_handshake_established == 0
+        for: 45s
+        labels:
+          severity: critical
+          owner: noc
+          component: wireguard
+        annotations:
+          summary: WireGuard peer has not completed a handshake
+          description: The peer is configured but no successful handshake has been observed.
+          runbook_url: https://github.com/IzzaldinSamir/vpn-noc-operations-lab/blob/main/RUNBOOK.md#vpnhandshakemissing-or-stale
+
+      - alert: VPNHandshakeStale
+        expr: vpn_peer_last_handshake_age_seconds > 180
+        for: 1m
+        labels:
+          severity: warning
+          owner: noc
+          component: wireguard
+        annotations:
+          summary: WireGuard peer handshake is stale
+          description: No current handshake has been observed for more than three minutes.
+          runbook_url: https://github.com/IzzaldinSamir/vpn-noc-operations-lab/blob/main/RUNBOOK.md#vpnhandshakemissing-or-stale
+
+  - name: vpn-synthetic-probes
+    rules:
+      - alert: VPNPeerUnreachable
+        expr: probe_success{job="blackbox-icmp"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          owner: noc
+          component: connectivity
+        annotations:
+          summary: Remote VPN peer is unreachable by ICMP
+          description: The synthetic ICMP probe to the site-b tunnel address is failing.
+          runbook_url: https://github.com/IzzaldinSamir/vpn-noc-operations-lab/blob/main/RUNBOOK.md#vpnpeerunreachable
+
+      - alert: VPNServicePortUnavailable
+        expr: probe_success{job="blackbox-tcp"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          owner: noc
+          component: service
+        annotations:
+          summary: Remote service TCP port is unavailable
+          description: TCP port 8080 on site-b cannot be reached across the VPN.
+          runbook_url: https://github.com/IzzaldinSamir/vpn-noc-operations-lab/blob/main/RUNBOOK.md#vpnserviceunavailable
+
+      - alert: VPNHTTPHealthCheckFailed
+        expr: probe_success{job="blackbox-http"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          owner: noc
+          component: service
+        annotations:
+          summary: Remote HTTP health check failed
+          description: The site-b application health endpoint is not returning the expected response.
+          runbook_url: https://github.com/IzzaldinSamir/vpn-noc-operations-lab/blob/main/RUNBOOK.md#vpnserviceunavailable
+
+      - alert: VPNDNSResolutionFailed
+        expr: probe_success{job="blackbox-dns"} == 0
+        for: 30s
+        labels:
+          severity: warning
+          owner: noc
+          component: dns
+        annotations:
+          summary: DNS resolution across the VPN failed
+          description: The site-b DNS service did not return the expected service.internal record.
+          runbook_url: https://github.com/IzzaldinSamir/vpn-noc-operations-lab/blob/main/RUNBOOK.md#vpndnsresolutionfailed
+
+      - alert: VPNProbeLatencyHigh
+        expr: probe_duration_seconds{job="blackbox-icmp"} > 0.2
+        for: 2m
+        labels:
+          severity: warning
+          owner: noc
+          component: performance
+        annotations:
+          summary: VPN probe latency is above 200 ms
+          description: Sustained latency across the lab tunnel has exceeded the warning threshold.
+          runbook_url: https://github.com/IzzaldinSamir/vpn-noc-operations-lab/blob/main/RUNBOOK.md#vpnprobelatencyhigh

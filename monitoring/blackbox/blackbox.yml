@@ -1,0 +1,38 @@
+modules:
+  icmp_ipv4:
+    prober: icmp
+    timeout: 3s
+    icmp:
+      preferred_ip_protocol: ip4
+
+  tcp_connect:
+    prober: tcp
+    timeout: 3s
+    tcp:
+      preferred_ip_protocol: ip4
+
+  http_health:
+    prober: http
+    timeout: 5s
+    http:
+      method: GET
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      valid_status_codes: [200]
+      fail_if_body_not_matches_regexp:
+        - '"status":"ok"'
+
+  dns_service_internal:
+    prober: dns
+    timeout: 3s
+    dns:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      transport_protocol: udp
+      query_name: service.internal
+      query_type: A
+      valid_rcodes:
+        - NOERROR
+      validate_answer_rrs:
+        fail_if_none_matches_regexp:
+          - 'service\.internal\..*10\.77\.0\.2'

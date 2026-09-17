@@ -1,0 +1,42 @@
+rule_files:
+  - alert_rules.yml
+
+evaluation_interval: 10s
+
+tests:
+  - interval: 10s
+    input_series:
+      - series: 'vpn_tunnel_up{interface="wg0"}'
+        values: '1 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 50s
+        alertname: VPNTunnelInterfaceDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              owner: noc
+              component: wireguard
+              interface: wg0
+            exp_annotations:
+              summary: WireGuard interface wg0 is down
+              description: The exporter cannot find the expected WireGuard tunnel interface.
+              runbook_url: https://github.com/IzzaldinSamir/vpn-noc-operations-lab/blob/main/RUNBOOK.md#vpntunnelinterfacedown
+
+  - interval: 10s
+    input_series:
+      - series: 'probe_success{job="blackbox-dns",instance="10.77.0.2"}'
+        values: '1 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 50s
+        alertname: VPNDNSResolutionFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              owner: noc
+              component: dns
+              job: blackbox-dns
+              instance: 10.77.0.2
+            exp_annotations:
+              summary: DNS resolution across the VPN failed
+              description: The site-b DNS service did not return the expected service.internal record.
+              runbook_url: https://github.com/IzzaldinSamir/vpn-noc-operations-lab/blob/main/RUNBOOK.md#vpndnsresolutionfailed

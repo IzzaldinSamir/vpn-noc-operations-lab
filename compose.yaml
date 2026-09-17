@@ -1,0 +1,216 @@
+name: vpn-noc-operations-lab
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-vpn-node: &vpn-node
+  build:
+    context: ./lab/node
+  cap_add:
+    - NET_ADMIN
+  sysctls:
+    net.ipv4.conf.all.src_valid_mark: "1"
+  security_opt:
+    - no-new-privileges:true
+  tmpfs:
+    - /run
+    - /tmp
+  restart: unless-stopped
+  networks:
+    vpn-control:
+  logging: *default-logging
+
+services:
+  site-a:
+    <<: *vpn-node
+    hostname: site-a
+    environment:
+      SITE_NAME: site-a
+    volumes:
+      - ./runtime/wireguard/site-a/wg0.conf:/etc/wireguard/wg0.conf:ro
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:9115:9115"
+      - "${BIND_ADDRESS:-127.0.0.1}:9586:9586"
+    networks:
+      vpn-control:
+        ipv4_address: 172.30.0.2
+    healthcheck:
+      test: ["CMD-SHELL", "wg show wg0 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  site-b:
+    <<: *vpn-node
+    hostname: site-b
+    environment:
+      SITE_NAME: site-b
+      ENABLE_HTTP: "true"
+      ENABLE_DNS: "true"
+    volumes:
+      - ./runtime/wireguard/site-b/wg0.conf:/etc/wireguard/wg0.conf:ro
+    networks:
+      vpn-control:
+        ipv4_address: 172.30.0.3
+    healthcheck:
+      test: ["CMD-SHELL", "wg show wg0 >/dev/null 2>&1 && wget -q -O - http://127.0.0.1:8080/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  vpn-exporter:
+    build:
+      context: .
+      target: vpn-exporter
+    network_mode: service:site-a
+    cap_add:
+      - NET_ADMIN
+    depends_on:
+      site-a:
+        condition: service_healthy
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.27.0
+    command:
+      - --config.file=/etc/blackbox/blackbox.yml
+    network_mode: service:site-a
+    volumes:
+      - ./monitoring/blackbox/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+    depends_on:
+      site-a:
+        condition: service_healthy
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+
+  incident-webhook:
+    build:
+      context: .
+      target: incident-webhook
+    environment:
+      INCIDENT_LOG: /data/alerts.jsonl
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:8081:8081"
+    volumes:
+      - incident-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - vpn-control
+    healthcheck:
+      test: ["CMD", "/incident-webhook", "--healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    logging: *default-logging
+
+  alertmanager:
+    image: prom/alertmanager:v0.33.1
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:9093:9093"
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    depends_on:
+      incident-webhook:
+        condition: service_healthy
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - vpn-control
+    logging: *default-logging
+
+  prometheus:
+    image: prom/prometheus:v3.13.2
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-7d}
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      - alertmanager
+      - vpn-exporter
+      - blackbox-exporter
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1:9090/-/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - vpn-control
+    logging: *default-logging
+
+  grafana:
+    image: grafana/grafana:13.1.2
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-vpn-noc-local-only}
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_USERS_DEFAULT_THEME: dark
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/vpn-noc-overview.json
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:3000:3000"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:3000/api/health >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - vpn-control
+    logging: *default-logging
+
+networks:
+  vpn-control:
+    name: vpn-noc-control
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+volumes:
+  alertmanager-data:
+  grafana-data:
+  incident-data:
+  prometheus-data:
