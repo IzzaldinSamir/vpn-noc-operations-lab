@@ -1,0 +1,9 @@
+.env
+runtime/
+.cache/
+coverage.out
+*.log
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
