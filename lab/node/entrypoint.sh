@@ -16,7 +16,7 @@ wg-quick up wg0
 if [[ "${ENABLE_HTTP:-false}" == "true" ]]; then
   mkdir -p /srv/www
   printf '{"status":"ok","site":"%s"}\n' "${SITE_NAME:-unknown}" > /srv/www/health
-  busybox httpd -f -p 8080 -h /srv/www &
+  httpd -f -p 8080 -h /srv/www &
 fi
 
 if [[ "${ENABLE_DNS:-false}" == "true" ]]; then

@@ -22,7 +22,7 @@ case "$scenario" in
     echo "site-b stopped. Watch Prometheus and Alertmanager for the correlated incident."
     ;;
   service-down)
-    docker compose exec -T site-b pkill -f 'busybox httpd' || true
+    docker compose exec -T site-b pkill -f 'httpd -f' || true
     echo "site-b HTTP service stopped. The TCP and HTTP probes should fail."
     ;;
   dns-failure)
